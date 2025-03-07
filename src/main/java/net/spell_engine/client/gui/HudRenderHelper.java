@@ -41,7 +41,8 @@ public class HudRenderHelper {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
 
-        if (player == null && !config) {
+        if ((player == null || player.isSpectator())
+                && !config) {
             return;
         }
 
@@ -83,7 +84,7 @@ public class HudRenderHelper {
             var spellCast = caster.getSpellCastProgress();
             if (spellCast != null) {
                 castBarViewModel = new CastBarWidget.ViewModel(
-                        spellCast.process().spell().school.color(),
+                        spellCast.process().spell().school.color,
                         spellCast.ratio(),
                         spellCast.process().length(),
                         SpellRender.iconTexture(spellCast.process().id()),

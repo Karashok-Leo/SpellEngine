@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class SpellBinding {
+    public static final Identifier ADVANCEMENT_VISIT_ID = new Identifier(SpellEngineMod.ID, "visit_spell_binding_table");
     public static final String name = "spell_binding";
     public static final Identifier ID = new Identifier(SpellEngineMod.ID, name);
     private static final float LIBRARY_POWER_BASE = 10;
@@ -23,18 +24,21 @@ public class SpellBinding {
     private static final int LIBRARY_POWER_CAP = 18;
     public static final int BOOK_OFFSET = 1;
     public enum Mode { SPELL, BOOK }
-    public record Offer(int id, int cost, int levelRequirement) {  }
+    public record Offer(int id, int cost, int levelRequirement, boolean isPowered) {  }
     public record OfferResult(Mode mode, List<Offer> offers) { }
 
     public static OfferResult offersFor(ItemStack itemStack, int libraryPower) {
         if (itemStack.getItem() == Items.BOOK) {
             var books = SpellBooks.sorted();
             var offers = new ArrayList<Offer>();
-            for (int i = 0; i < books.size(); ++i) {
-                offers.add(new Offer(
-                        i + BOOK_OFFSET,
-                        SpellEngineMod.config.spell_book_binding_level_cost,
-                        SpellEngineMod.config.spell_book_binding_level_requirement));
+            if (SpellEngineMod.config.spell_book_creation_enabled) {
+                for (int i = 0; i < books.size(); ++i) {
+                    offers.add(new Offer(
+                            i + BOOK_OFFSET,
+                            SpellEngineMod.config.spell_book_creation_cost,
+                            SpellEngineMod.config.spell_book_creation_requirement,
+                            true));
+                }
             }
             return new OfferResult(Mode.BOOK, offers);
         }
@@ -53,13 +57,17 @@ public class SpellBinding {
                 .filter(entry -> entry.getValue().learn != null
                         && entry.getValue().learn.tier > 0)
                 .sorted(SpellContainerHelper.spellSorter)
-                .map(entry -> new Offer(
-                    SpellRegistry.rawSpellId(entry.getKey()),
-                    entry.getValue().learn.tier * entry.getValue().learn.level_cost_per_tier,
-                    entry.getValue().learn.tier * entry.getValue().learn.level_requirement_per_tier
-                ))
-                .filter(offer -> (libraryPower == LIBRARY_POWER_CAP)
-                        || ((LIBRARY_POWER_BASE + libraryPower * LIBRARY_POWER_MULTIPLIER) >= offer.levelRequirement))
+                .map(entry -> {
+                    var cost = entry.getValue().learn.tier * entry.getValue().learn.level_cost_per_tier;
+                    var levelRequirement = entry.getValue().learn.tier * entry.getValue().learn.level_requirement_per_tier;
+                    return new Offer(
+                            SpellRegistry.rawSpellId(entry.getKey()),
+                            cost,
+                            levelRequirement,
+                            (libraryPower == LIBRARY_POWER_CAP)
+                            || ((LIBRARY_POWER_BASE + libraryPower * LIBRARY_POWER_MULTIPLIER) >= levelRequirement)
+                    );
+                })
                 .collect(Collectors.toList())
         );
     }
@@ -94,19 +102,20 @@ public class SpellBinding {
             }
         }
 
-        public static State of(int spellId, ItemStack itemStack, int cost, int requiredLevel) {
+        public static State of(int spellId, ItemStack itemStack, int levelCost, int requiredLevel, int lapisCost) {
             var validId = SpellRegistry.fromRawSpellId(spellId);
             if (validId.isEmpty()) {
                 return new State(ApplyState.INVALID, null);
             }
-            return State.of(validId.get(), itemStack, cost, requiredLevel);
+            return State.of(validId.get(), itemStack, levelCost, requiredLevel, lapisCost);
         }
 
-        public static State of(Identifier spellId, ItemStack itemStack, int cost, int requiredLevel) {
+        public static State of(Identifier spellId, ItemStack itemStack, int requiredLevel, int levelCost, int lapisCost) {
             var container = SpellContainerHelper.containerFromItemStack(itemStack);
-            int lapisCost = cost;
-            int levelCost = cost;
-            var requirements = new Requirements(lapisCost, levelCost, requiredLevel);
+            var requirements = new Requirements(
+                    lapisCost * SpellEngineMod.config.spell_binding_lapis_cost_multiplier,
+                    levelCost * SpellEngineMod.config.spell_binding_level_cost_multiplier,
+                    requiredLevel);
             if (container == null) {
                 return new State(ApplyState.INVALID, requirements);
             }

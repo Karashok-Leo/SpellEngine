@@ -3,6 +3,7 @@ package net.spell_engine.utils;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.Tameable;
+import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.entity.decoration.AbstractDecorationEntity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.passive.PassiveEntity;
@@ -19,6 +20,7 @@ import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 import net.spell_engine.SpellEngineMod;
 import net.spell_engine.api.spell.Spell;
+import net.spell_engine.compat.MultipartEntityCompat;
 import net.spell_engine.internals.Beam;
 import net.spell_engine.internals.casting.SpellCasterClient;
 import net.spell_engine.internals.SpellHelper;
@@ -52,6 +54,8 @@ public class TargetHelper {
         if (attacker == target) {
             return Relation.FRIENDLY;
         }
+        target = MultipartEntityCompat.coalesce(target);
+
         var casterTeam = attacker.getScoreboardTeam();
         var targetTeam = target.getScoreboardTeam();
         if (target instanceof Tameable tameable) {
@@ -240,13 +244,21 @@ public class TargetHelper {
             var distanceVector = VectorHelper.distanceVector(origin, target.getBoundingBox());
             return !target.isSpectator()
                     && target.canHit()
-                    && (predicate == null || predicate.test(target))
-                    && targetCenter.squaredDistanceTo(origin) <= squaredDistance
+                    // Predicate check
+                    && (predicate == null
+                        || predicate.test(target))
+                    // Distance check
+                    && ((range > 1)
+                        ? targetCenter.squaredDistanceTo(origin) <= squaredDistance
+                        : distanceVector.length() <= range)
+                    // Angle check
                     && ((angle <= 0)
                         || (VectorHelper.angleBetween(look, targetCenter.subtract(origin)) <= angle)
                         || (VectorHelper.angleBetween(look, distanceVector) <= angle)
                         )
-                    && (raycastObstacleFree(centerEntity, origin, targetCenter)
+                    // Obstacle check
+                    && (range < 1
+                        || raycastObstacleFree(centerEntity, origin, targetCenter)
                         || raycastObstacleFree(centerEntity, origin, origin.add(distanceVector))
                         )
                     ;
@@ -268,7 +280,18 @@ public class TargetHelper {
 
     public static boolean isTargetedByPlayer(Entity entity, PlayerEntity player) {
         if (entity.getWorld().isClient && player instanceof SpellCasterClient casterClient) {
-            return casterClient.getCurrentTargets().contains(entity);
+            var targets = casterClient.getCurrentTargets();
+            if (entity instanceof EnderDragonEntity dragon) {
+                // Targets contain any of the dragon's body parts
+                for (var part : dragon.getBodyParts()) {
+                    if (targets.contains(part)) {
+                        return true;
+                    }
+                }
+                return false;
+            } else {
+                return targets.contains(entity);
+            }
         }
         return false;
     }
@@ -287,14 +310,66 @@ public class TargetHelper {
         return new Beam.Position(start, end, length, hitBlock);
     }
 
-    @Nullable public static Vec3d findSolidBlockBelow(LivingEntity entity, World world) {
-        var position = entity.getPos();
-        var hit = world.raycast(new RaycastContext(position, position.add(0, -20, 0),
+    @Nullable public static Vec3d findSolidBlockBelow(LivingEntity entity, Vec3d position, World world, float height) {
+        var hit = world.raycast(new RaycastContext(position, position.add(0, height, 0),
                 RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, entity));
         if (hit.getType() == HitResult.Type.BLOCK) {
             var blockHit = (BlockHitResult)hit;
             return new Vec3d(position.getX(), blockHit.getBlockPos().getY() + 1F, position.getZ());
         }
         return null;
+    }
+
+    @Nullable public static Vec3d findTeleportDestination(LivingEntity entity, Vec3d look, float distance, int clearanceY) {
+        var world = entity.getWorld();
+        var start = entity.getEyePos();
+        var end = start.add(look.multiply(distance));
+        var hit = world.raycast(new RaycastContext(start, end, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, entity));
+
+        Vec3d hitPosition = null;
+        if (hit.getType() == HitResult.Type.MISS) {
+            hitPosition = end;
+        }
+        if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos() != null) {
+            hitPosition= hit.getPos();
+        }
+
+        if (hitPosition != null) {
+            var inverseLook = look.multiply(-1);
+            var paddedHitPosition = hitPosition.add(inverseLook.multiply(0.5F));
+            var hitDistance = start.distanceTo(paddedHitPosition);
+
+            float reverted = 0;
+            while (reverted < hitDistance) {
+                var blockPos = new BlockPos((int)paddedHitPosition.getX(), (int)paddedHitPosition.getY(), (int)paddedHitPosition.getZ());
+                if (isSafeWithClearance(world, blockPos, clearanceY)) {
+                    return paddedHitPosition;
+                }
+
+                reverted += 1;
+                paddedHitPosition = paddedHitPosition.add(inverseLook);
+            }
+        }
+        return null;
+    }
+
+    private static boolean isSafeWithClearance(World world, BlockPos blockPos, int clearanceY) {
+        if (isSafeTeleportDestination(world, blockPos)) {
+            var clearanceSafe = true;
+            for (int i = 0; i < clearanceY; i++) {
+                var clearancePos = blockPos.up(i);
+                if (!isSafeTeleportDestination(world, clearancePos)) {
+                    clearanceSafe = false;
+                    break;
+                }
+            }
+            return clearanceSafe;
+        }
+        return false;
+    }
+
+    private static boolean isSafeTeleportDestination(World world, BlockPos pos) {
+        var state = world.getBlockState(pos);
+        return !(state.isSolid() || state.shouldSuffocate(world, pos));
     }
 }

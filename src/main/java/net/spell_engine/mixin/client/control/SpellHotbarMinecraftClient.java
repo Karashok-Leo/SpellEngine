@@ -3,13 +3,14 @@ package net.spell_engine.mixin.client.control;
 import com.llamalad7.mixinextras.injector.WrapWithCondition;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.entity.player.PlayerInventory;
-import net.spell_engine.api.item.trinket.SpellBookItem;
-import net.spell_engine.api.spell.Spell;
+import net.spell_engine.SpellEngineMod;
 import net.spell_engine.client.SpellEngineClient;
+import net.spell_engine.client.input.AutoSwapHelper;
 import net.spell_engine.client.input.Keybindings;
 import net.spell_engine.client.input.SpellHotbar;
 import net.spell_engine.client.input.WrappedKeybinding;
@@ -22,19 +23,22 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@Mixin(MinecraftClient.class)
+@Mixin(value = MinecraftClient.class, priority = 999)
 public abstract class SpellHotbarMinecraftClient {
     @Shadow @Nullable public ClientPlayerEntity player;
     @Shadow @Final public GameOptions options;
     @Shadow private int itemUseCooldown;
     @Shadow public int attackCooldown;
-
     @Shadow @Nullable public Screen currentScreen;
+    @Shadow @Nullable public abstract ClientPlayNetworkHandler getNetworkHandler();
+
     @Nullable private WrappedKeybinding.Category spellHotbarHandle = null;
+
     @Inject(method = "handleInputEvents", at = @At(value = "HEAD"))
     private void handleInputEvents_HEAD_SpellHotbar(CallbackInfo ci) {
         spellHotbarHandle = null;
@@ -58,10 +62,6 @@ public abstract class SpellHotbarMinecraftClient {
         }
         if (handled != null) {
             spellHotbarHandle = handled.category();
-//            if (handled.spell().spell().mode == Spell.Mode.ITEM_USE
-//                    && !handled.keyBinding().equals(options.useKey)  ) {
-//                doItemUse();
-//            }
         }
 
         if (((SpellCasterClient)player).isCastingSpell()) {
@@ -131,6 +131,29 @@ public abstract class SpellHotbarMinecraftClient {
             return false;
         } else {
             return true;
+        }
+    }
+
+    @Inject(method = "doItemUse", at = @At("HEAD"), cancellable = true)
+    private void doItemUse_HEAD_autoSwap(CallbackInfo ci) {
+        if (SpellEngineClient.config.autoSwapHands) {
+            if (AutoSwapHelper.autoSwapForSpells()) {
+                itemUseCooldown = SpellEngineMod.config.auto_swap_cooldown;
+                attackCooldown = SpellEngineMod.config.auto_swap_cooldown;;
+                ci.cancel();
+            }
+        }
+    }
+
+    @Inject(method = "doAttack", at = @At("HEAD"), cancellable = true)
+    private void doAttack_HEAD_autoSwap(CallbackInfoReturnable<Boolean> cir) {
+        if (SpellEngineClient.config.autoSwapHands) {
+            if (AutoSwapHelper.autoSwapForAttack()) {
+                itemUseCooldown = SpellEngineMod.config.auto_swap_cooldown;;
+                attackCooldown = SpellEngineMod.config.auto_swap_cooldown;;
+                cir.setReturnValue(false);
+                cir.cancel();
+            }
         }
     }
 }

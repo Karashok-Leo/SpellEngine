@@ -8,6 +8,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.entity.projectile.ProjectileUtil;
 import net.minecraft.item.ItemStack;
@@ -33,8 +34,10 @@ import net.spell_engine.internals.SpellHelper;
 import net.spell_engine.internals.SpellRegistry;
 import net.spell_engine.particle.ParticleHelper;
 import net.spell_engine.utils.RecordsWithGson;
+import net.spell_engine.utils.SoundHelper;
 import net.spell_engine.utils.TargetHelper;
 import net.spell_engine.utils.VectorHelper;
+import net.spell_power.api.SpellPower;
 
 import java.util.Comparator;
 import java.util.HashSet;
@@ -52,6 +55,8 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
     private SpellHelper.ImpactContext context;
     private Entity followedTarget;
     private Identifier spellId;
+    private Identifier itemModelId;
+    private ItemStack itemStackModel;
     public Vec3d previousVelocity;
 
     public SpellProjectile(EntityType<? extends ProjectileEntity> entityType, World world) {
@@ -78,6 +83,12 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
         this.context = context;
         this.getDataTracker().set(CLIENT_DATA, gson.toJson(projectileData));
         this.getDataTracker().set(BEHAVIOUR, behaviour.toString());
+        if (projectileData.client_data != null && projectileData.client_data.model != null) {
+            var model = projectileData.client_data.model;
+            if (model.use_held_item) {
+                setItemStackModel(caster.getMainHandStack());
+            }
+        }
         setFollowedTarget(target);
     }
 
@@ -109,17 +120,33 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
     private Spell.ProjectileData clientSyncedData;
 
     private void updateClientSideData() {
-        if (clientSyncedData != null) {
-            return;
+        if (clientSyncedData == null) {
+            try {
+                var gson = new Gson();
+                var json = this.getDataTracker().get(CLIENT_DATA);
+                var data = gson.fromJson(json, Spell.ProjectileData.class);
+                clientSyncedData = data;
+            } catch (Exception e) {
+                System.err.println("Spell Projectile - Failed to read clientSyncedData");
+            }
         }
-        try {
-            var gson = new Gson();
-            var json = this.getDataTracker().get(CLIENT_DATA);
-            var data = gson.fromJson(json, Spell.ProjectileData.class);
-            clientSyncedData = data;
-        } catch (Exception e) {
-            System.err.println("Spell Projectile - Failed to read clientSyncedData");
+        if (itemModelId == null) {
+            var idString = this.getDataTracker().get(ITEM_MODEL_ID);
+            updateItemModel(idString);
         }
+    }
+
+    private void updateItemModel(String idString) {
+        if (idString != null && !idString.isEmpty()) {
+            itemModelId = new Identifier(this.getDataTracker().get(ITEM_MODEL_ID));
+            itemStackModel = Registries.ITEM.get(itemModelId).getDefaultStack();
+        }
+    }
+
+    public void setItemStackModel(ItemStack itemStack) {
+        var modelId = Registries.ITEM.getId(itemStack.getItem());
+        this.itemModelId = modelId;
+        this.getDataTracker().set(ITEM_MODEL_ID, modelId.toString());
     }
 
     public void setVelocity(double x, double y, double z, float speed, float spread, float divergence) {
@@ -291,11 +318,15 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
                     g = 0.8F;
                 }
 
-                if (getWorld().isClient) {
-                    var data = projectileData();
-                    if (data != null) {
+                var data = projectileData();
+                if (data != null) {
+                    if (getWorld().isClient) {
                         for (var travel_particles : data.client_data.travel_particles) {
                             ParticleHelper.play(getWorld(), this, getYaw(), getPitch(), travel_particles);
+                        }
+                    } else {
+                        if (data.travel_sound != null && age % data.travel_sound_interval == 0) {
+                            SoundHelper.playSound(getWorld(), this, data.travel_sound);
                         }
                     }
                 }
@@ -350,6 +381,14 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
                 var context = this.context;
                 if (context == null) {
                     context = new SpellHelper.ImpactContext();
+                    var spell = this.getSpell();
+                    if (getOwner() instanceof PlayerEntity player && spell != null)  {
+                        context.power(SpellPower.getSpellPower(spell.school, player));
+                    }
+                }
+                if (context.power() == null) {
+                    this.kill();
+                    return;
                 }
                 var performed = SpellHelper.projectileImpact(caster, this, target, this.getSpellInfo(), context.position(entityHitResult.getPos()));
                 if (performed) {
@@ -416,6 +455,7 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
 
         // Set trajectory
         var newTarget = otherTargets.get(0);
+        this.setPosition(target.getPos().add(0, target.getHeight() * 0.5F, 0));
         this.setFollowedTarget(newTarget);
 
         var distanceVector = (newTarget.getPos().add(0, newTarget.getHeight() / 2F, 0))
@@ -546,6 +586,14 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
         return context;
     }
 
+    public Identifier getItemModelId() {
+        return itemModelId;
+    }
+
+    public ItemStack getItemStackModel() {
+        return itemStackModel;
+    }
+
     // MARK: FlyingSpellEntity
 
     public Spell.ProjectileModel renderData() {
@@ -570,6 +618,7 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
     private static String NBT_SPELL_ID = "Spell.ID";
     private static String NBT_PERKS = "Perks";
     private static String NBT_IMPACT_CONTEXT = "Impact.Context";
+    private static String NBT_ITEM_MODEL_ID = "Item.Model.ID";
 
     @Override
     protected void onBlockHit(BlockHitResult blockHitResult) {
@@ -580,27 +629,33 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
         this.kill();
     }
 
+    @Override
     public void writeCustomDataToNbt(NbtCompound nbt) {
         super.writeCustomDataToNbt(nbt);
         var gson = new Gson();
-        nbt.putString(NBT_SPELL_ID, gson.toJson(spellId));
+        nbt.putString(NBT_SPELL_ID, spellId.toString());
         nbt.putString(NBT_IMPACT_CONTEXT, gson.toJson(context));
         nbt.putString(NBT_PERKS, gson.toJson(this.perks));
+        if (itemModelId != null) {
+            nbt.putString(NBT_ITEM_MODEL_ID, itemModelId.toString());
+        }
     }
 
+    @Override
     public void readCustomDataFromNbt(NbtCompound nbt) {
         super.readCustomDataFromNbt(nbt);
         if (nbt.contains(NBT_SPELL_ID, NbtElement.STRING_TYPE)) {
             try {
                 var gson = new Gson();
                 this.spellId = new Identifier(nbt.getString(NBT_SPELL_ID));
-                var recordReader = new GsonBuilder()
-                        .registerTypeAdapterFactory(new RecordsWithGson.RecordTypeAdapterFactory())
-                        .create();
-                this.context = recordReader.fromJson(nbt.getString(NBT_IMPACT_CONTEXT), SpellHelper.ImpactContext.class);
+                this.context = gson.fromJson(nbt.getString(NBT_IMPACT_CONTEXT), SpellHelper.ImpactContext.class);
                 this.perks = gson.fromJson(nbt.getString(NBT_PERKS), Spell.ProjectileData.Perks.class);
+
+                if (nbt.contains(NBT_ITEM_MODEL_ID, NbtElement.STRING_TYPE)) {
+                    updateItemModel(nbt.getString(NBT_ITEM_MODEL_ID));
+                }
             } catch (Exception e) {
-                System.err.println("SpellProjectile - Failed to read spell data from NBT");
+                System.err.println("SpellProjectile - Failed to read spell data from NBT " + e.getMessage());
             }
         }
     }
@@ -612,15 +667,18 @@ public class SpellProjectile extends ProjectileEntity implements FlyingSpellEnti
         this.getDataTracker().startTracking(CLIENT_DATA, "");
         this.getDataTracker().startTracking(TARGET_ID, 0);
         this.getDataTracker().startTracking(BEHAVIOUR, Behaviour.FLY.toString());
+        this.getDataTracker().startTracking(ITEM_MODEL_ID, "");
     }
 
     private static final TrackedData<String> BEHAVIOUR;
     private static final TrackedData<String> CLIENT_DATA;
     private static final TrackedData<Integer> TARGET_ID;
+    private static final TrackedData<String> ITEM_MODEL_ID;
 
     static {
         CLIENT_DATA = DataTracker.registerData(SpellProjectile.class, TrackedDataHandlerRegistry.STRING);
         TARGET_ID = DataTracker.registerData(SpellProjectile.class, TrackedDataHandlerRegistry.INTEGER);
         BEHAVIOUR = DataTracker.registerData(SpellProjectile.class, TrackedDataHandlerRegistry.STRING);
+        ITEM_MODEL_ID = DataTracker.registerData(SpellProjectile.class, TrackedDataHandlerRegistry.STRING);
     }
 }

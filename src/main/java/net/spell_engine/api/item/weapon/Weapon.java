@@ -20,10 +20,9 @@ import net.minecraft.util.Lazy;
 import net.spell_engine.api.item.AttributeResolver;
 import net.spell_engine.api.item.ConfigurableAttributes;
 import net.spell_engine.api.item.ItemConfig;
-import net.spell_power.api.MagicSchool;
-import net.spell_power.api.attributes.SpellAttributes;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -160,7 +159,7 @@ public class Weapon {
         });
     }
 
-    private static Multimap<EntityAttribute, EntityAttributeModifier> attributesFrom(ItemConfig.Weapon config) {
+    public static Multimap<EntityAttribute, EntityAttributeModifier> attributesFrom(ItemConfig.Weapon config) {
         ImmutableMultimap.Builder<EntityAttribute, EntityAttributeModifier> builder = ImmutableMultimap.builder();
         builder.put(EntityAttributes.GENERIC_ATTACK_DAMAGE,
                 new EntityAttributeModifier(
@@ -174,7 +173,16 @@ public class Weapon {
                         "Weapon modifier",
                         config.attack_speed,
                         EntityAttributeModifier.Operation.ADDITION));
-        for(var attribute: config.attributes) {
+        var attributes = attributesFrom(config.attributes);
+        for(var entry: attributes.entrySet()) {
+            builder.put(entry.getKey(), entry.getValue());
+        }
+        return builder.build();
+    }
+
+    public static Map<EntityAttribute, EntityAttributeModifier> attributesFrom(List<ItemConfig.Attribute> attributes) {
+        LinkedHashMap<EntityAttribute, EntityAttributeModifier> resolvedAttributes = new LinkedHashMap<>();
+        for(var attribute: attributes) {
             if (attribute.value == 0) {
                 continue;
             }
@@ -184,7 +192,7 @@ public class Weapon {
                 var uuid = (attributeId.equals(attackDamageId) || attributeId.equals(projectileDamageId))
                         ? ItemAccessor.ATTACK_DAMAGE_MODIFIER_ID()
                         : miscWeaponAttributeUUID;
-                builder.put(entityAttribute,
+                resolvedAttributes.put(entityAttribute,
                         new EntityAttributeModifier(
                                 uuid,
                                 "Weapon modifier",
@@ -194,10 +202,10 @@ public class Weapon {
                 System.err.println("Failed to add item attribute modifier: " + e.getMessage());
             }
         }
-        return builder.build();
+        return resolvedAttributes;
     }
 
-    private static final UUID miscWeaponAttributeUUID = SpellAttributes.POWER.get(MagicSchool.ARCANE).attribute.weaponUUID;
+    private static final UUID miscWeaponAttributeUUID = UUID.fromString("c102cb57-a7b8-4a98-8c6e-2cd7b70b74c1");
     private static final Identifier attackDamageId = new Identifier("generic.attack_damage");
     private static final Identifier projectileDamageId = new Identifier("projectile_damage", "generic");
     private static abstract class ItemAccessor extends Item {

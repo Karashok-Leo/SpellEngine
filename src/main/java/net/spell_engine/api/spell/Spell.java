@@ -1,12 +1,14 @@
 package net.spell_engine.api.spell;
 
 import net.spell_engine.api.render.LightEmission;
-import net.spell_power.api.MagicSchool;
+import net.spell_engine.utils.TargetHelper;
+import net.spell_power.api.SpellPower;
+import net.spell_power.api.SpellSchool;
 import org.jetbrains.annotations.Nullable;
 
 public class Spell {
     // Structure
-    public MagicSchool school;
+    public SpellSchool school;
     public float range = 50;
 
     // An arbitrary group to group spells by
@@ -30,11 +32,13 @@ public class Spell {
         public float duration = 0;
         public int channel_ticks = 0;
         public String animation;
+        public boolean animates_ranged_weapon = false;
+        /// Default `0.2` matches the same as movement speed during vanilla item usage (such as bow)"
+        public float movement_speed = 0.2F;
         public Sound start_sound;
         public Sound sound;
         public ParticleBatch[] particles = new ParticleBatch[]{};
     }
-    public boolean casting_animates_ranged_weapon = false;
 
     public ItemUse item_use = new ItemUse();
     public static class ItemUse { public ItemUse() { }
@@ -62,7 +66,10 @@ public class Spell {
         public static class Target { public Target() { }
             public Type type;
             public enum Type {
-                AREA, BEAM, CLOUD, CURSOR, PROJECTILE, METEOR, SELF, SHOOT_ARROW
+                AREA, BEAM, CURSOR, SELF,
+
+                // To be refactored into `Action` in the future
+                PROJECTILE, METEOR, CLOUD, SHOOT_ARROW
             }
 
             public Area area;
@@ -84,7 +91,9 @@ public class Spell {
                 public ParticleBatch[] block_hit_particles = new ParticleBatch[]{};
             }
 
+            // Populate either `cloud` or `clouds` but not both
             public Cloud cloud;
+            public Cloud[] clouds = new Cloud[]{};
             public static class Cloud { public Cloud() { }
                 // Custom entity type id to spawn, must be a subclass of `SpellCloud`
                 @Nullable public String entity_type_id;
@@ -93,10 +102,18 @@ public class Spell {
 
                 /// The number of ticks between looking for targets and trying to apply impact
                 public int impact_tick_interval = 5;
+                public int delay_ticks = 0;
                 public EntityPlacement placement = new EntityPlacement();
-
+                @Nullable public Sound presence_sound;
                 public ClientData client_data = new ClientData();
                 public static class ClientData {
+                    public int light_level = 0;
+                    public ParticleBatch[] particles = new ParticleBatch[]{};
+                    public ProjectileModel model;
+                }
+                public Spawn spawn = new Spawn();
+                public static class Spawn {
+                    public Sound sound;
                     public ParticleBatch[] particles = new ParticleBatch[]{};
                 }
             }
@@ -119,6 +136,11 @@ public class Spell {
             public static class Meteor { public Meteor() { }
                 /// How high the falling projectile is launched from compared to the position of the target
                 public float launch_height = 10;
+                public int offset_requires_sequence = 1;
+                public int divergence_requires_sequence = 1;
+                public int follow_target_requires_sequence = -1;
+                /// How far horizontally the falling projectile is launched from the target
+                public float launch_radius = 0;
                 /// Launch properties of the falling projectile
                 public LaunchProperties launch_properties = new LaunchProperties();
                 /// The projectile to be launched
@@ -144,13 +166,13 @@ public class Spell {
     public static class Impact { public Impact() { }
         public Action action;
         /// Magic school of this specific impact, if null then spell school is used
-        @Nullable public MagicSchool school;
+        @Nullable public SpellSchool school;
         public static class Action { public Action() { }
             public Type type;
             public boolean apply_to_caster = false;
             public float min_power = 1;
             public enum Type {
-                DAMAGE, HEAL, STATUS_EFFECT, FIRE, SPAWN
+                DAMAGE, HEAL, STATUS_EFFECT, FIRE, SPAWN, TELEPORT
             }
             public Damage damage;
             public static class Damage { public Damage() { }
@@ -186,11 +208,33 @@ public class Spell {
                 public int duration = 2;
                 public int tick_offset = 10;
             }
+
+            // Populate either `spawn` or `spawns` but not both
             public Spawn spawn;
+            public Spawn[] spawns = new Spawn[]{};
             public static class Spawn {
                 public String entity_type_id;
                 public int time_to_live_seconds = 0;
+                public int delay_ticks = 0;
                 public EntityPlacement placement = new EntityPlacement();
+            }
+
+            public Teleport teleport;
+            public static class Teleport { public Teleport() { }
+                public enum Mode { FORWARD, BEHIND_TARGET }
+                public Mode mode;
+                public int required_clearance_block_y = 1;
+                public TargetHelper.Intent intent = TargetHelper.Intent.HELPFUL;
+                public Forward forward;
+                public static class Forward { public Forward() { }
+                    public float distance = 10;
+                }
+                public BehindTarget behind_target;
+                public static class BehindTarget { public BehindTarget() { }
+                    public float distance = 1.5F;
+                }
+                @Nullable public ParticleBatch[] depart_particles;
+                @Nullable public ParticleBatch[] arrive_particles;
             }
         }
 
@@ -217,10 +261,19 @@ public class Spell {
 
     public static class AreaImpact { public AreaImpact() { }
         public float radius = 1F;
+        public ExtraRadius extra_radius = new ExtraRadius();
+        public static class ExtraRadius {
+            public float power_coefficient = 0;
+            public float power_cap = 0;
+        }
         public Release.Target.Area area = new Release.Target.Area();
         public ParticleBatch[] particles = new ParticleBatch[]{};
         @Nullable
         public Sound sound;
+
+        public float combinedRadius(SpellPower.Result power) {
+            return radius + extra_radius.power_coefficient * (float) Math.min(extra_radius.power_cap, power.baseValue());
+        }
     }
 
     public static class LaunchProperties { public LaunchProperties() { }
@@ -247,6 +300,9 @@ public class Spell {
     public static class ProjectileData { public ProjectileData() { }
         public float divergence = 0;
         public float homing_angle = 1F;
+        /// The frequency of playing the travel sound in ticks
+        public int travel_sound_interval = 20;
+        @Nullable public Sound travel_sound;
 
         public Perks perks = new Perks();
         public static class Perks { Perks() { }
@@ -288,7 +344,6 @@ public class Spell {
             /// Example values:
             /// 14 - torch
             /// 10 - soul torch
-
             public int light_level = 0;
             public ParticleBatch[] travel_particles;
             public ProjectileModel model;
@@ -296,13 +351,15 @@ public class Spell {
     }
 
     public static class ProjectileModel { public ProjectileModel() { }
+        public boolean use_held_item = false;
         public String model_id;
         public LightEmission light_emission = LightEmission.GLOW;
         public float scale = 1F;
         public float rotate_degrees_per_tick = 2F;
-        public RenderMode render = RenderMode.DEEP;
-        public enum RenderMode {
-            FLAT, DEEP
+        public float rotate_degrees_offset = 0;
+        public Orientation orientation = Orientation.TOWARDS_MOTION;
+        public enum Orientation {
+            TOWARDS_CAMERA, TOWARDS_MOTION, ALONG_MOTION
         }
     }
 

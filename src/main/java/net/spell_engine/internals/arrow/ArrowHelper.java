@@ -1,6 +1,7 @@
 package net.spell_engine.internals.arrow;
 
-import dev.kosmx.playerAnim.core.data.quarktool.Playable;
+import net.fabric_extras.ranged_weapon.api.EntityAttributes_RangedWeapon;
+import net.fabric_extras.ranged_weapon.internal.ScalingUtil;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.CrossbowUser;
@@ -21,7 +22,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.spell_engine.api.spell.SpellEvents;
 import net.spell_engine.api.spell.SpellInfo;
-import net.spell_engine.compat.QuiverCompat;
 import net.spell_engine.internals.SpellHelper;
 import net.spell_engine.internals.WorldScheduler;
 import org.joml.Quaternionf;
@@ -29,10 +29,10 @@ import org.joml.Vector3f;
 
 public class ArrowHelper {
     public static void shootArrow(World world, LivingEntity shooter, SpellInfo spellInfo, SpellHelper.ImpactContext context) {
-        shootArrow(world, shooter, spellInfo, context, true);
+        shootArrow(world, shooter, spellInfo, context, 0);
     }
 
-    public static void shootArrow(World world, LivingEntity shooter, SpellInfo spellInfo, SpellHelper.ImpactContext context, boolean initial) {
+    public static void shootArrow(World world, LivingEntity shooter, SpellInfo spellInfo, SpellHelper.ImpactContext context, int sequenceIndex) {
         boolean isCreative = shooter instanceof PlayerEntity && ((PlayerEntity)shooter).getAbilities().creativeMode;
 
         var spell = spellInfo.spell();
@@ -51,26 +51,28 @@ public class ArrowHelper {
                 }
             }
 
+            var scaling = ScalingUtil.scaling(shooter.getMainHandStack(), shooter.getAttributeValue(EntityAttributes_RangedWeapon.DAMAGE.attribute));
             var projectile = shoot(world, shooter, Hand.MAIN_HAND, shooter.getMainHandStack(),
                     ammo, 1.0F, isCreative,
-                    launchProperties.velocity, 1.0F, 0.0F, spellInfo);
+                    (float) (launchProperties.velocity * scaling.velocity()), 1.0F, 0.0F, spellInfo);
             if (projectile instanceof PersistentProjectileEntity persistentProjectile) {
-                persistentProjectile.setDamage(persistentProjectile.getDamage() * shoot_arrow.damage_multiplier);
+                persistentProjectile.setDamage(persistentProjectile.getDamage() * shoot_arrow.damage_multiplier * scaling.damage());
                 persistentProjectile.pickupType = arrowPickUpType;
             }
             if (SpellEvents.ARROW_FIRED.isListened()) {
                 SpellEvents.ARROW_FIRED.invoke((listener) -> listener.onArrowLaunch(
-                        new SpellEvents.ArrowLaunchEvent(projectile, shooter, spellInfo, context, initial)));
+                        new SpellEvents.ArrowLaunchEvent(projectile, shooter, spellInfo, context, sequenceIndex)));
             }
             var extra_launch = launchProperties.extra_launch_count;
-            if (initial && extra_launch > 0) {
+            if (sequenceIndex == 0 && extra_launch > 0) {
                 for (int i = 0; i < extra_launch; i++) {
                     var ticks = (i + 1) * launchProperties.extra_launch_delay;
+                    var nextSequenceIndex = i + 1;
                     ((WorldScheduler)world).schedule(ticks, () -> {
                         if (shooter == null || !shooter.isAlive()) {
                             return;
                         }
-                        shootArrow(world, shooter, spellInfo, context, false);
+                        shootArrow(world, shooter, spellInfo, context, nextSequenceIndex);
                     });
                 }
             }
@@ -78,9 +80,6 @@ public class ArrowHelper {
     }
 
     public static boolean tryConsumeItem(PlayerEntity player, Item item) {
-        if (QuiverCompat.consumeArrow(item, player)) {
-            return true;
-        }
         for(int i = 0; i < player.getInventory().size(); ++i) {
             var stack = player.getInventory().getStack(i);
             if (stack.isOf(item)) {

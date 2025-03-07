@@ -25,10 +25,18 @@ public class ParticleHelper {
     private static Random rng = new Random();
 
     public static void sendBatches(Entity trackedEntity, ParticleBatch[] batches) {
-        sendBatches(trackedEntity, batches, 1, PlayerLookup.tracking(trackedEntity));
+        sendBatches(trackedEntity, batches, true);
+    }
+
+    public static void sendBatches(Entity trackedEntity, ParticleBatch[] batches, boolean includeSourceEntity) {
+        sendBatches(trackedEntity, batches, 1, PlayerLookup.tracking(trackedEntity), includeSourceEntity);
     }
 
     public static void sendBatches(Entity trackedEntity, ParticleBatch[] batches, float countMultiplier, Collection<ServerPlayerEntity> trackers) {
+        sendBatches(trackedEntity, batches, countMultiplier, trackers, true);
+    }
+
+    public static void sendBatches(Entity trackedEntity, ParticleBatch[] batches, float countMultiplier, Collection<ServerPlayerEntity> trackers, boolean includeSourceEntity) {
         if (batches == null || batches.length == 0) {
             return;
         }
@@ -47,7 +55,7 @@ public class ParticleHelper {
                 }
             }
             spawns.add(new Packets.ParticleBatches.Spawn(
-                    sourceEntityId,
+                    includeSourceEntity ? sourceEntityId : 0,
                     trackedEntity.getYaw(),
                     trackedEntity.getPitch(),
                     sourceLocation, batch));
@@ -194,6 +202,10 @@ public class ParticleHelper {
     private static Vec3d offset(float width, float extent, ParticleBatch.Shape shape, Vec3d direction,
                                 ParticleBatch.Rotation rotation, float yaw, float pitch) {
         var offset = Vec3d.ZERO;
+        if (extent >= ParticleBatch.EXTENT_TRESHOLD) {
+            width = 0;
+            extent -= ParticleBatch.EXTENT_TRESHOLD;
+        }
         switch (shape) {
             case CIRCLE, CONE, SPHERE -> {
                 if (extent > 0) {

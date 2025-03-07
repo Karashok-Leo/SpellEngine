@@ -13,6 +13,8 @@ public class ClientConfig implements ConfigData {
     @ConfigEntry.Gui.Tooltip
     public boolean holdToCastCharged = true;
     @ConfigEntry.Gui.Tooltip
+    public boolean autoSwapHands = true;
+    @ConfigEntry.Gui.Tooltip
     public boolean spellHotbarShowsOffhand = true;
     @ConfigEntry.Gui.Tooltip
     @Nullable
@@ -46,6 +48,8 @@ public class ClientConfig implements ConfigData {
     public boolean filterInvalidTargets = true;
     @ConfigEntry.Gui.Tooltip
     public boolean alwaysShowFullTooltip = false;
+    @ConfigEntry.Gui.Tooltip
+    public boolean showSpellBookSuppportTooltip = true;
     @ConfigEntry.Gui.Tooltip
     public boolean showSpellBindingTooltip = true;
     @ConfigEntry.Gui.Tooltip

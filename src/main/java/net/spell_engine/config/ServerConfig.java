@@ -9,8 +9,8 @@ import java.util.LinkedHashMap;
 
 @Config(name = "server")
 public class ServerConfig implements ConfigData { public ServerConfig() {}
-    @Comment("Default `0.2` matches the same as movement speed during vanilla item usage (such as bow)")
-    public float movement_speed_while_casting_spell = 0.2F;
+    @Comment("Applied as multiplier on top of spell.cast.movement_speed. Default value of 1.0 means no change.")
+    public float movement_multiplier_speed_while_casting = 1F;
     @Comment("Allow spells to bypass invulnerability frames. This is required in order for high attack frequency spells (such as beams) to work.")
     public boolean bypass_iframes = true;
     @Comment("Spell haste reduces the cooldown time of abilities")
@@ -21,15 +21,26 @@ public class ServerConfig implements ConfigData { public ServerConfig() {}
     public boolean spell_cost_item_allowed = true;
     @Comment("Spells should damage items on use. Set `false` to disable.")
     public boolean spell_cost_durability_allowed = true;
-    @Comment("If set true, a Fireball doesn't collide with an ally, a healing projectile doesn't collide with an enemy")
-    public boolean projectiles_pass_thru_irrelevant_targets = true;
-    @Comment("Spell book creation level requirement")
-    public int spell_book_binding_level_requirement = 3;
+    @Comment("The time in ticks of global cooldown to apply to all instant cast spells when casted.")
+    public int spell_instant_cast_gcd = 0;
+    @Comment("Players cannot unequip a spell book, if one of the spells in it is on cooldown.")
+    public boolean spell_book_cooldown_lock = true;
+    @Comment("Players can use the Spell Binding Table to create spell books.")
+    public boolean spell_book_creation_enabled = true;
     @Comment("Spell book creation level cost")
-    public int spell_book_binding_level_cost = 1;
+    public int spell_book_creation_cost = 1;
+    @Comment("Spell book creation level requirement")
+    public int spell_book_creation_requirement = 1;
+    @Comment("Spell binding level cost multiplier")
+    public int spell_binding_level_cost_multiplier = 1;
+    @Comment("Spell binding lapis lazuli cost multiplier")
+    public int spell_binding_lapis_cost_multiplier = 1;
     @Comment("Should the player be able to cast spells from the offhand spell book?")
     public boolean spell_book_offhand = false;
-
+    @Comment("If set true, a Fireball doesn't collide with an ally, a healing projectile doesn't collide with an enemy")
+    public boolean projectiles_pass_thru_irrelevant_targets = true;
+    @Comment("Auto swap Bow & Spear cooldown ticks to apply for attack and itemUse")
+    public int auto_swap_cooldown = 5;
     @Comment("Apply `Spell Casting from Spell Book` capability to anything that subclasses Sword")
     public boolean add_spell_casting_to_swords = true;
     @Comment("Apply `Spell Casting from Spell Book` capability to any item matching this regex. (Not applied of empty)")

@@ -1,3 +1,138 @@
+# 0.15.12
+
+Functional changes:
+- Fix crashes alongside Supplementaries, due to outdated quiver compatibility (now removed), thanks to @Dralaon #90
+
+# 0.15.11
+
+Functional changes:
+- Fix targeting Ender Dragon with spells #63
+- Fix casting sound muting after failed cast attempt
+- Improve spell Beam rendering (no longer casts shadows, no longer conflicting with other transparent blocks, such as water)
+- Improve auto swap feature to consider tools #71
+- Improve spell projectile ricochet hit consistency
+- Improve spell projectile parsing and restoring stability
+
+# 0.15.10
+
+Functional changes:
+- Improve auto swap feature to consider tools #71
+- Client side configurable tooltip of "Casts spells from equipped Spell Book" 
+
+# 0.15.9
+
+Functional changes:
+- Spell Binding Table spell entries now have more clear requirement and cost information
+- Add `spell_book_creation_enabled` config option to disable spell book creation at the Spell Binding Table
+- Add `spell_binding_level_cost_multiplier` config option
+- Add `spell_binding_lapis_cost_multiplier` config option
+
+# 0.15.8
+
+Functional changes:
+- Reduce spell book creation level requirement
+- Attempt to fix deseralization crash #62
+- Fix Arcane Blast targeting allies
+- Fix stuck casting sounds
+
+# 0.15.7
+
+API Changes:
+- Extend item config attribute resolution
+
+# 0.15.6
+
+Functional changes:
+- Reworked loot injection system, now able to spawn enchanted loot from tags
+- Update Spell Infinity custom application condition, custom items can now be enabled by adding to `spell_engine:enchant_spell_infinity` tag
+
+# 0.15.5
+
+Functional changes:
+- Disable class switching during cooldowns
+- Add spellbook equip sound
+
+# 0.15.4
+
+Functional changes:
+- Improve automatic hand swap feature
+
+API Changes:
+- Add throw related player animations
+- Make rage buff particles translucent
+
+# 0.15.3
+
+Functional changes:
+- Improve automatic hand swap feature
+- Hide Spell Hotbar when player is in Spectator mode
+
+# 0.15.2
+
+Functional changes:
+- Improve automatic hand swap feature
+
+# 0.15.1
+
+Functional changes:
+- Add automatic hand swap (client configurable feature)
+  - Works when having a melee weapon and a skill use weapon in main and off hands
+  - Attack key will swap the melee weapon to the main hand
+  - Use key will swap the skill use weapon to the main hand
+  - Typically useful for archers (bow + spear)
+- Fix random crashes of Spell Projectiles
+- Update to latest Shoulder Surfing API
+
+# 0.15.0
+
+Functional changes:
+- Improve Spell Binding obfuscation style (thanks to fzzyhammers)
+- Add new particle effects and player animations
+- Add global cooldown after instant spell cast (configurable)
+- Update advancements scope and basic structure
+
+API Changes:
+- BREAKING! Replace spell projectile `ProjectileModel.RenderMode` with `Orientation`
+- BREAKING! Spell tooltip: Multiple placeholders of the same kind have new format (example: `{damage_1}`, `{damage_2}` ...) 
+- Update Fabric Loader to 15+ for embedded MixinExtras
+- Add custom spell tooltip mutators (refactored SpellTooltip internals)
+- Add teleport "BEHIND_TARGET" teleport action type
+- Add spell projectile model rendered as held item (for throw skills)
+- Add spell projectile travel sound
+- Add spell specific movement speed multiplier during casting
+
+# 0.14.3
+
+API Changes:
+- BREAKING! - Migrated to new version of Spell Power Attribute API
+- Migrated to new version of Ranged Weapon API, Projectile Damage Attribute is no longer being used
+- Expose `PHSICAL_RANGED` and `PHYSICAL_MELEE` schools into public package (ExternalSpellSchools)
+
+Functional changes:
+- Add obfuscated spell binding entries, when Spell Binding Table is not having enough supporting bookshelves
+- Migrate to latest API of Shoulder Surfing
+- Draw Speed attribute (`ranged_weapon:haste`) working as haste for archery skills (`PHSICAL_RANGED` school)
+
+# 0.13.3
+
+API Changes:
+- Change embedding scope of `ExtraRadius` to `AreaImpact` to be more widely applicable
+
+Functional changes:
+- Update Italian translation, thanks to Zano1999
+- Fix render glitches of spell objects without emitted light, when not using shaders
+- Add `{cloud_radius}` placeholder support to spell tooltip
+
+# 0.13.2
+
+- Add particle batch extent special behaviour
+- Add Spell Cloud extra radius
+- Add Spell Cloud center model rendering
+
+# 0.13.1
+
+- Fix launch crash on dedicated servers 
+
 # 0.13.0
 
 API changes:
@@ -7,10 +142,15 @@ API changes:
 - Add particle batch `roll` and `roll_offset` fields, to spawn particles with rotated motion vector
 - Add `nature_spark_mini` particle
 - Add new impact action type: `SPAWN`, for spawning entities
+- Add new impact action type: `TELEPORT`, to move the caster around
 - Add barebone immunity API
 - Add ShaderCompat helper to determine active shader
 - Add CustomLayers raw constructor
 - Add two-way entity collision API 
+- Add SpellCloud `presence_sound` data field, batch spawning, custom positioning and timing
+- Add SpellCloud `spawn` structure for particles and sounds for spawning
+- Add SpellCloud LambDynamicLights support
+- Add new spawn directives for Meteor spawning
 
 Functional changes:
 - Spell Container resolution
@@ -18,10 +158,13 @@ Functional changes:
   - When Trinkets mod is missing, spell books can be put into the offhand slot (needs to be enabled in `config/server.json5 spell_book_offhand`)
   - Spell Containers are now resolved and combined from all equipped trinket slots (prioritizing Spell Book slot first)
 - Usable offhand items (such as Shields) are now visible on the Spell Hotbar
+- Add new loot config using rpg series item tags, into `config/rpg_series/loot.json`
 - Loot configuration now supports item tag id entries
 - Spell particle emitting entity yaw and pitch now being synchronized
 - Fix projectile pitch setting #40
+- Fix some spells unable to hit Ender Dragon
 - Update Italian translation, thanks to Zano1999
+- Piglins love RPG Series golden weapons
 
 # 0.12.5
 

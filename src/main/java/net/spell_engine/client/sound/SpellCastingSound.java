@@ -6,10 +6,17 @@ import net.minecraft.client.sound.TickableSoundInstance;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Identifier;
+import net.spell_engine.internals.casting.SpellCasterEntity;
+import org.jetbrains.annotations.Nullable;
 
 public class SpellCastingSound extends PositionedSoundInstance implements SoundInstance, TickableSoundInstance {
+    public interface Listener {
+        void onSpellCastingSoundDone();
+    }
+
     private LivingEntity emitter;
     private boolean done;
+    public @Nullable Listener listener;
 
     public SpellCastingSound(LivingEntity emitter, Identifier id, float volume, float pitch) {
         super(id, SoundCategory.PLAYERS, volume, pitch,
@@ -19,7 +26,7 @@ public class SpellCastingSound extends PositionedSoundInstance implements SoundI
     }
 
     private boolean isEmitterCasting() {
-        return emitter != null && emitter.isAlive();
+        return emitter != null && emitter.isAlive() && (emitter instanceof SpellCasterEntity caster && caster.isCastingSpell());
     }
 
     @Override
@@ -30,6 +37,9 @@ public class SpellCastingSound extends PositionedSoundInstance implements SoundI
     protected final void setDone() {
         this.done = true;
         this.repeat = false;
+        if (listener != null) {
+            listener.onSpellCastingSoundDone();
+        }
     }
 
     @Override

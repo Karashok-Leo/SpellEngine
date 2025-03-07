@@ -23,13 +23,16 @@
     "effect.StatusEffectRemoveOnHit",
     "effect.StatusEffectSynchronized",
     "entity.EntityCollision",
+    "entity.ItemCooldownManagerMixin",
     "entity.LivingEntityAccessor",
+    "entity.LivingEntityEvents",
     "entity.LivingEntityKnockback",
     "entity.PlayerEntityMixin"
   ],
   "client": [
     "client.AbstractClientPlayerEntityMixin",
     "client.ClientPlayerEntityMixin",
+    "client.ClientWorldMixin",
     "client.EntityRenderMixin",
     "client.LivingEntityVisualMixin",
     "client.action_impair.ClientPlayerActionImpairing",
